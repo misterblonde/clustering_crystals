@@ -1,0 +1,15 @@
+
+1. DATA
+The actual Neighshells/ xyz data as well as the .cif files and opt_res files are all saved on Edna/ClusteringCrystals/3_Clustering
+
+2. KERNEL 
+The graphs and Kernels have been computed in one step (e.g. python sp_kernel.py, wl_kernel.py) on the cx1 cluster. 
+
+3. CLUSTERING
+
+inputs: Kernel.csv, names_list.txt,
+optional: dens_ener.txt, 3motifs_classified.txt
+
+
+
+

@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Oct  6 16:49:35 2019
+
+@author: robert
+"""
+#%%
+import numpy as np
+import pandas as pd
+import os, glob, re, sys
+import networkx as nx
+from scipy.spatial import distance_matrix
+import subprocess as sp
+from sklearn.preprocessing import MinMaxScaler
+
+import grakel 
+import pickle 
+from grakel import Graph
+from grakel.kernels import NeighborhoodSubgraphPairwiseDistance, NeighborhoodHash, ShortestPath
+from grakel.kernels import PyramidMatch, ShortestPathAttr, WeisfeilerLehman, WeisfeilerLehmanOptimalAssignment
+from grakel.kernels import VertexHistogram, Propagation, PropagationAttr, RandomWalk
+from grakel.kernels import HadamardCode, GraphHopper, SvmTheta
+import time
+import os
+import numpy as np
+
+"""       BUILDS A BINARY OR WEIGHTED GRAPH FROM XYZ FILE
+
+
+        Possible Inputs: 3x3x3 Supercell, NeighShell (15 molecules)
+
+        Graph Edges seen as contacts distance cutoff: sum(vdw_radii)+2 A
+        Edges = Distances ≤ sum of the VdW radii + 2 Angstrom will be considered
+        (CCDC_Compack inspired cutoff)
+
+"""
+
+# ‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹ USER INPUT ››››››››››››››››››››››››››››››››››››››››››››››››››
+inp_folder = 'xyz'   # dir with xyz to convert into graphs
+
+
+## variables which can be easily changed, hard coded for comparison of graphs
+
+
+atom_vdw_radii = {
+              'Al': 2, 'Sb': 2, 'Ar': 1.88, 'As': 1.85, 'Ba': 2,
+              'Be': 2, 'Bi': 2, 'B': 2, 'Br': 1.85, 'Cd': 1.58,
+              'Cs': 2, 'Ca': 2, 'C': 1.7, 'Ce': 2, 'Cl': 1.75,
+              'Cr': 2, 'Co': 2, 'Cu': 1.4, 'Dy': 2, 'Er': 2,
+              'Eu': 2, 'F':  1.47, 'Gd': 2, 'Ga': 1.87, 'Ge': 2,
+              'Au': 1.66, 'Hf': 2, 'He': 1.4, 'Ho': 2, 'H': 1.09,
+              'In': 1.93, 'I': 1.98, 'Ir': 2, 'Fe': 2, 'Kr': 2.02,
+              'La': 2, 'Pb': 2.02, 'Li': 1.82, 'Lu': 2, 'Mg': 1.73,
+              'Mn': 2, 'Hg': 1.55, 'Mo': 2, 'Nd': 2, 'Ne': 1.54,
+              'Ni': 1.63, 'Nb': 2, 'N':  1.55, 'Os': 2, 'O':  1.52,
+              'Pd': 1.63, 'P': 1.8, 'Pt': 1.72, 'K': 2.75, 'Pr': 2,
+              'Pa': 2, 'Re': 2, 'Rh': 2, 'Rb': 2, 'Ru': 2, 'Sm': 2,
+              'Sc': 2, 'Se': 1.9, 'Si': 2.1, 'Ag': 1.72, 'Na': 2.27,
+              'Sr': 2, 'S': 1.8, 'Ta': 2, 'Te': 2.06, 'Tb': 2,
+              'Tl': 1.96, 'Th': 2, 'Tm': 2, 'Sn': 2.17, 'Ti': 2,
+              'W': 2, 'U':  1.86, 'V':  2, 'Xe': 2.16, 'Yb': 2,
+              'Y': 2, 'Zn': 1.29, 'Zr': 2, 'X':  1.0, 'D':  1.0
+                 }
+
+
+
+skip = 0 #2
+
+
+def build_graph(inp_folder, basename, labels, coords, atom_vdw_radii, weighted=True, sparsify=False):
+    # turns distance matrix into a simple 0 1 binary graph according to
+    # sum of VdW distance + X A. see header
+    # get vdw radii for each atom to compute sum of vdw radii
+    dist_mat = distance_matrix(coords, coords)
+    add_to_threshold = 2  # extra 2 A
+    # skip = 2
+
+    labels_vdw= []
+    for i in range(0,len(labels)):
+        vdw = atom_vdw_radii.get(str(labels[i]))
+        labels_vdw.append(vdw)
+    # turning distance matrix into an unweighted graph - simplest version
+    # decide what kind of distance matrix you want:
+    counter=0
+
+    if weighted==False:
+        """ BINARY GRAPH """
+        for i in range(0,int(np.shape(labels)[0])):
+            for j in range(0,int(np.shape(labels)[0])):
+                sum_vdw_radii = labels_vdw[i]+labels_vdw[j]
+                threshold = float(sum_vdw_radii) +2
+
+                if float(dist_mat[i, j]) <= threshold:
+                        dist_mat[i,j]= 1
+                else:
+                    dist_mat[i,j]= 0
+
+                counter =counter + 1
+
+
+    else:
+        """ WEIGHTED GRAPH """
+        for i in range(0,int(np.shape(labels)[0])):
+            for j in range(0,int(np.shape(labels)[0])):
+                sum_vdw_radii = labels_vdw[i]+labels_vdw[j]
+                threshold = float(sum_vdw_radii) + add_to_threshold
+
+                if float(dist_mat[i, j]) >= threshold:
+                    dist_mat[i,j]= 0
+
+                counter =counter + 1
+
+
+    
+    
+    feats = pd.get_dummies(pd.DataFrame(labels)).values
+    
+
+    G = nx.from_numpy_matrix(dist_mat)
+    for i in range(len(G)):
+        G.nodes[i]['atom_types'] = feats[i,:]
+
+
+    
+
+    return G
+
+
+#%%
+#‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹‹››››››››››››››››››››››››››››››››››››››
+
+
+def construct_helicene_graphs():
+    
+    skip = 2
+    inp_folder = 'xyz'   # dir with xyz to convert into graphs
+    
+    
+    # create output folder if it doesn't already exist
+    if os.path.isdir(f"csv_{inp_folder}") == True:
+        pass
+    else:
+        sp.call(f"mkdir csv_{inp_folder}", shell=True)
+    
+    
+    open("HELICENES_A.txt", "w+") # contains all the adjacency matrices/graphs (X)
+    open("HELICENES_graph_indicator.txt", "w+")
+    open("HELICENES_graph_labels.txt", "w+") # contains the y target var
+    open("HELICENES_node_attributes.txt", "w+") # contains the atom labels
+    count = 0
+    
+    graphs = []
+    graph_labels = []
+    node_attr = []
+    names_list = []
+    # loop through input folder
+    for name in glob.glob(f"./{inp_folder}/*.xyz"):
+        print(name)
+        basename = re.findall("\d+", name)[-1] #last item get right number if res3_supercell_0.xyz => extracts 0
+        print(basename)
+        count = count+1
+        
+        
+        ids = re.findall("\d+", name) 
+    
+        names_list.append(basename)
+        # J_files = pd.read_csv("./J_files/J_res"+str(ids[0])+"_supercell.txt", delim_whitespace=True,names=['molA', 'molB', 'holeJ', 'elecJ'])
+        
+        
+        
+        
+        # label1 = J_files[(J_files['molA'] == int(ids[1])) & (J_files['molB'] == int(ids[2]))].holeJ.values[0]
+        # label2 = J_files[(J_files['molA'] == int(ids[1])) & (J_files['molB'] == int(ids[2]))].elecJ.values[0]
+        
+        # graph_labels.append(label1)
+        
+    
+        """ READ INPUT FILES """
+        labels = np.genfromtxt(name,usecols=0,dtype=str, skip_header=skip)
+        coords = np.genfromtxt(name, skip_header=skip)[:,1:]
+    
+        """ BUILD BINARY DISTANCE MATRIX """
+        graph = build_graph(inp_folder, basename, labels, coords,atom_vdw_radii)
+        
+        graphs.append(graph)
+        print(len(graph))
+        node_attr.append(labels)
+
+    return graphs, node_attr, names_list #,graph_labels
+
+
+# %%
+
+
+def read_in_grakel(graph, node_attr):
+    # read graph from pickle
+    G = graph#nx.from_numpy_matrix(graph)#nx.read_gpickle(f"{working_dir}/{folder}/{filn}.pkl")
+    # compute and add node_labels on betweenness centrality
+    # node_labels = node_attr#nx.betweenness_centrality(G, normalized=True)
+    node_labels = nx.betweenness_centrality(G, normalized=True)
+    nx.set_node_attributes(G, node_labels, 'label')
+    # turn nx graph into grakel graph
+    return grakel.graph_from_networkx([G], node_labels_tag='label')
+
+
+def dummy_run(kernel_name, kernel, graphs):
+    print(kernel_name)
+    gk = kernel
+    start = time.time()
+    # compute kernel for graph (incl. labels)
+    # print(np.shape(grakel_graph))
+    # fit or fit_transform?
+    ref_kernel = gk.fit_transform(ref_graph)
+
+    end = time. time()
+    print("Time needed for Reference Kernel computation (s): ", end - start)
+    # reference kernel if normalised always 1.0
+
+    ############# OTHER CRYSTALS #########################################
+    # # rigid list of all files in dir
+    # comp_crystals = os.listdir(f"{current_path}/{inp_folder}")
+
+    # # strip .csv extension from files in directory
+    # new = [x.strip(".pkl") for x in comp_crystals]
+    new = graphs
+    # mylist = []
+    # graphs = []
+    #comp_crystals
+    print("Generating graph objects.")
+    # test set _transform
+    print("Starting Kernel computation.")
+    start2 = time. time()
+    for idx, name in enumerate(new):
+            grakel_graph = read_in_grakel(name, node_attrs[idx])
+            # graphs.append(grakel_graph)
+            # mylist.append(name)
+            similarity = gk.transform(grakel_graph)
+            print(f"{names_list[idx]}\t{similarity.flat[0]}")
+            # print(f"{ref_file}\t{name}\t{similarity.flat[0]}")
+
+    end2 = time. time()
+    print("Time needed for Kernel comparison (s): ", end2 - start2)
+
+
+
+# # input parameters
+# pyramid match default params
+L = 14# default 4
+d = 8 # default 6
+
+# make graphs from xyz
+graphs, node_attrs, names_list = construct_helicene_graphs()
+
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+
+# kernels = [subgraph_matching, graph_hopper, pm, vh, eh, wlopt, wl, prop, sp, \
+#            propattr, svmtheta, lt, nh_subgraph, hadamard]
+
+# ha = HadamardCode()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("Hadamard", ha, graphs)
+
+
+# gh = GraphHopper()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("GraphHopper",gh, graphs)
+
+
+# st = SvmTheta()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("SvmTheta",st, graphs)
+
+print("Default iterations k is 3.")
+k = 5
+print(k)
+nh = NeighborhoodHash(R=k, nh_type='count_sensitive', bits=16)
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("NH", nh, graphs)
+
+k = 10 
+print(k)
+nh = NeighborhoodHash(R=k,nh_type='count_sensitive', bits=16)
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("NH", nh, graphs)
+
+k = 25 
+print(k)
+nh = NeighborhoodHash(R=k, nh_type='count_sensitive', bits=16)
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("NH", nh, graphs)
+
+k = 35 
+print(k)
+nh = NeighborhoodHash(R=k, nh_type='count_sensitive', bits=16)
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("NH", nh, graphs)
+
+
+# __  THE WORST ONES (SIM=0 ) were tried again ______________________________
+
+
+# wl = WeisfeilerLehmanOptimalAssignment()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("WeisfeilerLehmanOptAss", wl, graphs)
+
+
+# vh = VertexHistogram()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("VertexHistogram", vh, graphs)
+
+
+# prop = Propagation()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("Propagation", prop, graphs)
+
+
+# pa = PropagationAttr()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("PropagationAttr", pa, graphs)
+
+
+rw = RandomWalk()
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("RandomWalk", rw, graphs)
+
+
+
+wl = WeisfeilerLehman()
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("WeisfeilerLehman", wl, graphs)
+
+
+# nh = NeighborhoodSubgraphPairwiseDistance()
+# # make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("NeighborhoodSubgraph", nh, graphs)
+
+
+
+print(L, d)
+# !To do: sort out labels warning!
+# ! make sure to pass in graph and ref graph every time:!
+pm = PyramidMatch(L=L, d=d)
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("PyramidMatch", pm, graphs)
+
+# nh = NeighborhoodHash()
+# dummy_run("NeighborhoodHash", nh)
+L = 8
+d = 10
+print(L, d)
+pm = PyramidMatch(L=L, d=d)
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("PyramidMatch", pm, graphs)
+
+
+L = 10
+d = 12
+print(L, d)
+pm = PyramidMatch(L=L, d=d)
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("PyramidMatch", pm, graphs)
+
+sp = ShortestPath()
+# make ref graph 
+ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+dummy_run("ShortestPath", sp, graphs)
+
+# sp = ShortestPathAttr()
+# make ref graph 
+# ref_graph = read_in_grakel(graphs[0], node_attrs[0])
+# dummy_run("ShortestPathAttr", sp)
