@@ -10,6 +10,14 @@ ANALYSIS OF GRAPH SIMILARITY KERNELS
 
 """
 
+def see_five_highest_sim(adj):
+    x = adj.values
+    flat = x.flatten()
+    flat = list(set(flat))
+    flat.sort(reverse=True)
+    print(flat[:5])
+    return flat
+
 #%%
 import pandas as pd
 import numpy as np
@@ -21,12 +29,12 @@ from adjustText import adjust_text
 
 #%%
 
-n_clusters = 6
+n_clusters = 5
 kernel_name = "PM_4_6"
 # read in data:
 adj = pd.read_csv(f'data/{kernel_name}.csv', header=None) # kernel
 filns = pd.read_csv('data/names_list.txt', header=None, names=['ID'])
-ener = pd.read_csv(f'data/Ethynyl_CrystE_all.csv')
+ener = pd.read_csv(f'data/Cyano_CrystE_all.csv')
 
 # add index (cyrstal_ID) to index and columns
 adj = adj.set_index([filns.ID.values])
@@ -41,43 +49,27 @@ labels_list = ener.sg.values.tolist()
 ener['sg_label'] = ener['sg'].apply(labels_list.index)
 print(ener.head())
 
+x = adj.values
 # delete outlier of 100% similarity? 
 # figure out how to shrink the margin between ''outlier'' similarity of graph
 # with itself compared to any other crystal to better see the other similarities.
 # adj = adj.replace(15057.281250, 200)
-x = adj.values
-
-flat = x.flatten()
-
-flat = list(set(flat))
-flat.sort(reverse=True)
-# print(flat[:5])
-
-sim_with_itself = flat[0]
-real_max = flat[1]
-
-descending_x =  -np.sort(-x)
-print(descending_x)
-
-# print(np.argmax(x))
-# sim_1 = []
-# sim_2 = []
-# for idx, col in enumerate(adj.columns.values):
-# #     print(col)
-# #     largest_two = adj[col].nlargest(2)
-# #     sim_1.append(largest_two[0])
-# #     sim_2.append(largest_two[1])
-# #     print(max(sim_2))
-
-# print("Largest similarities with itself:")
-# print(min(sim_1), max(sim_1))
-# print("highest similarity with something else:")
-# print(min(sim_2), max(sim_2))
-
-adj[adj == sim_with_itself] = real_max #flat[-2]
+flat = see_five_highest_sim(adj)
+duplicate1 = flat[0]
+duplicate2 = flat[1]
+real_max = flat[4]
+sim_with_itself = flat[2]
+#descending_x =  -np.sort(-x)
+duplicates = [flat[0], flat[1], flat[2], flat[3]]
+for item in duplicates:
+    adj[adj == item] = real_max #np.nan # real_max #flat[-2]
 
 
-# adj.replace({15057.281250: 200}, regex=True)
+see_five_highest_sim(adj)
+
+
+# %%
+
 #%%
 # normalise data
 norm = (x-np.min(x))/(np.max(x)-np.min(x))
@@ -162,15 +154,25 @@ plt.scatter(pca.components_[0],pca.components_[1], c=clustering.labels_, s=30, c
 texts = []
 for idx, name in enumerate(pca.components_[1]):
     # print(name)
-    if name > -0.10: #or yval > 0.6:
-        yval = name
-        xval = pca.components_[0][idx]
-        label = adj.index[idx]
-        if label <= 44:
-            texts.append(plt.text(xval,yval, label, weight="bold", fontsize=6)) # texts.append())
+    # if name < -0.40 or name > 0.40: #or yval > 0.6:
+        # print("PCA1 val: ", name, "index label: ", adj.index[idx])
+    yval = name
+    xval = pca.components_[0][idx]
+    label = adj.index[idx]  # ID label
+    E_ranked = ener[ener.index == int(label)]
+    print(E_ranked)
+
+    E_rank_label = E_ranked.iloc[0]['E_idx']
+    # if label == 669:
+    if E_rank_label <= 38:
+            texts.append(plt.text(xval,yval, E_rank_label, weight="bold", fontsize=6)) # 
+    # if name > 0.12 or name < -0.05 or xval > 0.12:
+    #     texts.append(plt.text(xval,yval, E_rank_label, weight="bold", fontsize=6))
+
+ 
 
 adjust_text(texts)
-plt.legend(labels=labels_list)
+# plt.legend(labels=labels_list)
 plt.xlabel("PC1", fontsize=14)
 plt.ylabel("PC2", fontsize=14)
 plt.xticks(fontsize=10)

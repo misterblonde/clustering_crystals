@@ -10,6 +10,34 @@ ANALYSIS OF GRAPH SIMILARITY KERNELS
 
 """
 
+def see_five_highest_sim(adj):
+    x = adj.values
+    flat = x.flatten()
+    flat = list(set(flat))
+    flat.sort(reverse=True)
+    print(flat[:5])
+    return flat
+
+
+def check_av_n_mol_common(clusters_d):
+    """
+    For each crystal in respective cluster, check how many mols it has in common
+    with other crystals within the cluster. 
+    """
+    df = pd.read_csv('data/n_mols_comp.csv', header=None, names=['id1', 'sg1','id2', 'sg2', 'n_matched', 'rmsd'])
+    print("We are checking the clusters now:")
+    print(df.head())
+    for k,v in clusters_d.items():
+        print(k,v)
+        for i in v:
+            for j in v:
+                if i != j:
+                    print(i, j)
+                    mols_in_cluster = df.loc[(df['id1'] == i) & (df['id2'] == j)] 
+                    print(mols_in_cluster.iloc[0]['n_matched'])
+
+
+    
 #%%
 import pandas as pd
 import numpy as np
@@ -26,7 +54,7 @@ kernel_name = "PM_4_6"
 # read in data:
 adj = pd.read_csv(f'data/{kernel_name}.csv', header=None) # kernel
 filns = pd.read_csv('data/names_list.txt', header=None, names=['ID'])
-ener = pd.read_csv(f'data/Ethynyl_CrystE_all.csv')
+ener = pd.read_csv(f'data/Cyano_CrystE_all.csv')
 
 # add index (cyrstal_ID) to index and columns
 adj = adj.set_index([filns.ID.values])
@@ -41,43 +69,27 @@ labels_list = ener.sg.values.tolist()
 ener['sg_label'] = ener['sg'].apply(labels_list.index)
 print(ener.head())
 
+x = adj.values
 # delete outlier of 100% similarity? 
 # figure out how to shrink the margin between ''outlier'' similarity of graph
 # with itself compared to any other crystal to better see the other similarities.
 # adj = adj.replace(15057.281250, 200)
-x = adj.values
-
-flat = x.flatten()
-
-flat = list(set(flat))
-flat.sort(reverse=True)
-# print(flat[:5])
-
-sim_with_itself = flat[0]
-real_max = flat[1]
-
-descending_x =  -np.sort(-x)
-print(descending_x)
-
-# print(np.argmax(x))
-# sim_1 = []
-# sim_2 = []
-# for idx, col in enumerate(adj.columns.values):
-# #     print(col)
-# #     largest_two = adj[col].nlargest(2)
-# #     sim_1.append(largest_two[0])
-# #     sim_2.append(largest_two[1])
-# #     print(max(sim_2))
-
-# print("Largest similarities with itself:")
-# print(min(sim_1), max(sim_1))
-# print("highest similarity with something else:")
-# print(min(sim_2), max(sim_2))
-
-adj[adj == sim_with_itself] = real_max #flat[-2]
+flat = see_five_highest_sim(adj)
+duplicate1 = flat[0]
+duplicate2 = flat[1]
+real_max = flat[4]
+sim_with_itself = flat[2]
+#descending_x =  -np.sort(-x)
+duplicates = [flat[0], flat[1], flat[2], flat[3]]
+for item in duplicates:
+    adj[adj == item] = real_max #np.nan # real_max #flat[-2]
 
 
-# adj.replace({15057.281250: 200}, regex=True)
+see_five_highest_sim(adj)
+
+
+# %%
+
 #%%
 # normalise data
 norm = (x-np.min(x))/(np.max(x)-np.min(x))
@@ -131,22 +143,12 @@ from sklearn.metrics import v_measure_score
 
 
 #%%
-clustering = AgglomerativeClustering(linkage='complete', n_clusters=n_clusters)
+clustering = AgglomerativeClustering(linkage='ward', n_clusters=n_clusters)
 X_fitted = clustering.fit(X)
 clusters = list(set(clustering.labels_))
 print("N clusters", n_clusters)
-    #plot_clustering(X, clustering.labels_, "%s linkage" % 'complete')
-    #plt.show()
-# plt.figure()
-# plt.scatter(X[:,0],X[:,1],c=clustering.labels_,s=20)
-# plt.show()
-# vmeasure.append(v_measure_score(encoded,clustering.labels_))    
-# plt.show()
-
+# print(clustering.labels_)
 #%%
-
-# right_side = ax.spines["right"]
-# right_side.set_visible(False)
 
 qualitative_colors = sns.color_palette("Set3", 8, as_cmap=True)
 qualitative_colors2 = sns.color_palette("Set3", int(len(set(labels_list))), as_cmap=True)
@@ -160,17 +162,31 @@ fig, ax = plt.subplots() # clustering.labels_
 plt.scatter(pca.components_[0],pca.components_[1], c=clustering.labels_, s=30, cmap=qualitative_colors2)
 # sg Pastel2_
 texts = []
+
+from collections import defaultdict
+clusters_d = defaultdict(list)
+
 for idx, name in enumerate(pca.components_[1]):
     # print(name)
-    if name > -0.10: #or yval > 0.6:
-        yval = name
-        xval = pca.components_[0][idx]
-        label = adj.index[idx]
-        if label <= 44:
-            texts.append(plt.text(xval,yval, label, weight="bold", fontsize=6)) # texts.append())
+    # if name < -0.40 or name > 0.40: #or yval > 0.6:
+        # print("PCA1 val: ", name, "index label: ", adj.index[idx])
+    yval = name
+    xval = pca.components_[0][idx]
+    W99_label = adj.index[idx]  # ID label
+    E_ranked = ener[ener.index == int(W99_label)]
+    E_rank_label = E_ranked.iloc[0]['E_idx']
+    print(W99_label, E_rank_label, clustering.labels_[idx])
+
+    clusters_d[clustering.labels_[idx]].append(W99_label)
+    # print(E_ranked)
+
+    # if E_rank_label <= 38: # E_rank_label energy ranking label
+    #         texts.append(plt.text(xval,yval, label, weight="bold", fontsize=6)) # 
+    if name > 0.12 or name < -0.05 or xval > 0.12:
+            texts.append(plt.text(xval,yval, W99_label, weight="bold", fontsize=6))
 
 adjust_text(texts)
-plt.legend(labels=labels_list)
+# plt.legend(labels=labels_list)
 plt.xlabel("PC1", fontsize=14)
 plt.ylabel("PC2", fontsize=14)
 plt.xticks(fontsize=10)
@@ -182,6 +198,9 @@ ax.spines['top'].set_visible(False)
 plt.tight_layout()
 plt.savefig(f"{kernel_name}_{n_clusters}_sg_PCA.png", dpi=300)
 plt.show()
+
+
+check_av_n_mol_common(clusters_d)
 
 # quit()
 
