@@ -26,15 +26,17 @@ def check_av_n_mol_common(clusters_d):
     """
     df = pd.read_csv('data/n_mols_comp.csv', header=None, names=['id1', 'sg1','id2', 'sg2', 'n_matched', 'rmsd'])
     print("We are checking the clusters now:")
-    print(df.head())
+    df.id1.astype("int32")
+    df.id2.astype("int32")
     for k,v in clusters_d.items():
         print(k,v)
         for i in v:
             for j in v:
                 if i != j:
-                    print(i, j)
-                    mols_in_cluster = df.loc[(df['id1'] == i) & (df['id2'] == j)] 
-                    print(mols_in_cluster.iloc[0]['n_matched'])
+                    print(i, j) # works fine up till here 
+                    mols_in_cluster = df[(df['id1'] == int(i)) & (df['id2'] == int(j))] 
+                    # if mols_in_cluster.empty() == False: 
+                    print(mols_in_cluster)
 
 
     
@@ -60,20 +62,20 @@ ener = pd.read_csv(f'data/Cyano_CrystE_all.csv')
 adj = adj.set_index([filns.ID.values])
 adj.columns = [filns.ID]
 
-print(filns.head())
-print(ener.head())
 # crystal ener-dens file sort in order of index/col ID labels in adjacency matrix A:
 ener = ener.set_index('ID')
 ener = ener.loc[filns.ID.values.tolist()]
 labels_list = ener.sg.values.tolist()
 ener['sg_label'] = ener['sg'].apply(labels_list.index)
-print(ener.head())
+ener['dma_relat_ener'] = ener['dma_ener'] - ener['dma_ener'].min()
 
 x = adj.values
 # delete outlier of 100% similarity? 
 # figure out how to shrink the margin between ''outlier'' similarity of graph
 # with itself compared to any other crystal to better see the other similarities.
 # adj = adj.replace(15057.281250, 200)
+print("Make sure you adapt the number of duplicate/highest similarity outliers \
+      to rescale for clustering.")
 flat = see_five_highest_sim(adj)
 duplicate1 = flat[0]
 duplicate2 = flat[1]
@@ -86,14 +88,11 @@ for item in duplicates:
 
 
 see_five_highest_sim(adj)
-
-
 # %%
 
 #%%
 # normalise data
 norm = (x-np.min(x))/(np.max(x)-np.min(x))
-
 G = nx.Graph(norm)
 
 #%%
@@ -117,18 +116,14 @@ from sklearn.decomposition import PCA
 pca = PCA(n_components=2)
 pca.fit(norm)  
 # plt.scatter(pca.components_[0],pca.components_[1])
-
 #%%
 
 X = np.transpose(pca.components_)
 
 #%%
 from sklearn.cluster import AgglomerativeClustering
-
 from sklearn.metrics import v_measure_score
-
 # vmeasure = []
-
 # for i in range(2,20):
 #     clustering = AgglomerativeClustering(linkage='complete', n_clusters=i)
 #     clustering.fit(norm)
@@ -140,8 +135,6 @@ from sklearn.metrics import v_measure_score
     # print(v_measure_score)
     # vmeasure.append(v_measure_score(encoded,clustering.labels_))
     # plt.show()
-
-
 #%%
 clustering = AgglomerativeClustering(linkage='ward', n_clusters=n_clusters)
 X_fitted = clustering.fit(X)
@@ -149,7 +142,6 @@ clusters = list(set(clustering.labels_))
 print("N clusters", n_clusters)
 # print(clustering.labels_)
 #%%
-
 qualitative_colors = sns.color_palette("Set3", 8, as_cmap=True)
 qualitative_colors2 = sns.color_palette("Set3", int(len(set(labels_list))), as_cmap=True)
 # cmap = sns.cubehelix_palette(as_cmap=True)
@@ -196,11 +188,11 @@ ax.spines['right'].set_visible(False)
 ax.spines['top'].set_visible(False)
 # plt.colorbar()
 plt.tight_layout()
-plt.savefig(f"{kernel_name}_{n_clusters}_sg_PCA.png", dpi=300)
+plt.savefig(f"{kernel_name}_{n_clusters}_sg_PCA_newKernel.png", dpi=300)
 plt.show()
 
 
-check_av_n_mol_common(clusters_d)
+# check_av_n_mol_common(clusters_d)
 
 # quit()
 

@@ -1,0 +1,8 @@
+Needs to be removed before clustering: 
+334 Idx in PCA0/PCA1:  162
+Needs to be removed before clustering: 
+325 Idx in PCA0/PCA1:  167
+Needs to be removed before clustering: 
+90 Idx in PCA0/PCA1:  253
+Needs to be removed before clustering: 
+78 Idx in PCA0/PCA1:  285

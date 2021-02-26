@@ -1,0 +1,8 @@
+set bg_rgb, white 
+set orthoscopic, on 
+set ray_trace_gain, 0
+set ray_trace_mode, 1
+hide spheres 
+show sticks 
+hide (hydro)
+ray
