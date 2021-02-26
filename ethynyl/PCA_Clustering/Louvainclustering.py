@@ -15,11 +15,25 @@ from matplotlib import cm
 from matplotlib.colors import ListedColormap, LinearSegmentedColormap, to_rgba
 from adjustText import adjust_text
 
+
+def see_five_highest_sim(adj):
+    """
+    Function to sort top similarity scores in descending order of the entire 
+    array, such that the number of duplicate packings present in the landscape 
+    can be determined for rescaling. 
+
+    """
+    x = adj.values
+    flat = x.flatten()
+    flat = list(set(flat))
+    flat.sort(reverse=True)
+    return flat
+
 def generate_subsets(whole_louvain, packings):
     """
     Assumes df_cat is sorted in the same way as pca/clustering
     """
-    print(packings.packing.unique())
+    # print(packings.packing.unique())
     unique_packings = packings.packing.nunique()
 
     d_clusters = {'motif':[],
@@ -58,6 +72,7 @@ def generate_subsets(whole_louvain, packings):
 
     return s0, s1, s2, s3, s4, s5, s6, s7, s8, markers
 
+
 def plot_scatter_clusters(s0, s1, s2, s3, s4, s5, s6, s7, s8, m, E_rank, whole, n_clusters, filn):
     # SCATTERPLOT
 
@@ -81,13 +96,23 @@ def plot_scatter_clusters(s0, s1, s2, s3, s4, s5, s6, s7, s8, m, E_rank, whole, 
 
     # annotate scatter points with crystal nomer
     texts = []
+    print(E_rank.head())
     for i, name in enumerate(E_rank.E_rank.values.tolist()):
-        print(name)
+        yval = whole.iloc[i]['y']#[0]
+        xval = whole.iloc[i]['x']#[0] #pca.components_[0][idx]
+        # 
+        W99_label = E_rank.index[i]  # ID label
+    # E_ranked = ener[ener.index == int(W99_label)]
+    # E_rank_label = E_ranked.iloc[0]['E_idx']
         if int(name) < 39: #or yval > 0.6:
-            yval = whole.iloc[i]['y']#[0]
-            xval = whole.iloc[i]['x']#[0] #pca.components_[0][idx]
             label = name+1
             texts.append(plt.text(xval,yval, label, weight="bold", fontsize=6)) # texts.append())
+
+        if (W99_label == 232) or (W99_label == 599) or (W99_label == 504):
+            texts.append(plt.text(xval,yval, W99_label, weight="bold", fontsize=6))
+        # if (xval < -20) or (xval > 20) or (yval > 20):
+        #     # print(W99_label)
+        #     texts.append(plt.text(xval, yval, W99_label, weight="bold", fontsize=6)) # texts.append())
 
     adjust_text(texts)
     plt.xlabel("TSNE1", fontsize=14)
@@ -134,11 +159,23 @@ adj.columns = [filns.ID]
 # with itself compared to any other crystal to better see the other similarities.
 # adj = adj.replace(15057.281250, 200)
 
-# print(adj.head())
-# print(feature.head())
-adj[adj > 7000] = 0
-print(adj.max())
 x = adj.values
+
+flat = see_five_highest_sim(adj)
+print(flat[:10])
+print("Old maximum Sim: ", np.max(flat))
+real_max = flat[3]
+print("New maximum sim: ", real_max)
+
+# #descending_x =  -np.sort(-x)
+duplicates = [item for item in flat[:3]]
+for item in duplicates:
+    adj[adj == item] = real_max #np.nan # real_max #flat[-2]
+
+flat = see_five_highest_sim(adj)
+print(flat[:10])
+
+
 norm = (x-np.min(x))/(np.max(x)-np.min(x))
 x = norm
 
