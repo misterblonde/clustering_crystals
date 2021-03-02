@@ -90,13 +90,15 @@ def plot_scatter_clusters(s0, s1, s2, s3, s4, s5, s6, s7, s8, m, E_rank, whole, 
 
     # annotate scatter points with crystal nomer
     texts = []
-    for i, name in enumerate(E_rank.index.values.tolist()):
+    
+    for i, name in enumerate(E_rank.E_rank.values.tolist()):
         # print(name)
         if int(name) < 39: #or yval > 0.6:
             yval = whole.iloc[i]['y']#[0]
             xval = whole.iloc[i]['x']#[0] #pca.components_[0][idx]
-            label = name #+1
-            texts.append(plt.text(xval,yval, label, weight="bold", fontsize=6)) # texts.append())
+            label = name #+1]\
+            W99_label = E_rank.index.values[i]
+            texts.append(plt.text(xval,yval, W99_label, weight="bold", fontsize=6)) # texts.append())
 
     adjust_text(texts)
     plt.xlabel("TSNE1", fontsize=14)
@@ -113,6 +115,7 @@ def plot_scatter_clusters(s0, s1, s2, s3, s4, s5, s6, s7, s8, m, E_rank, whole, 
 
 kernel_inp="PM_4_6"
 outn = "Louvain"
+n_cut = 13 #12
 
 #df = pd.read_csv(f"data/{kernel_inp}.csv", header=0)
 adj = pd.read_csv(f'data/{kernel_inp}.csv', header=None) # kerne
@@ -120,7 +123,7 @@ print(f"{np.shape(adj)[0]} training examples in Similarity file")
 
 filns = pd.read_csv('data/names_list.txt', header=None, names=['ID']) # need order to cp order for feature df
 feature = pd.read_csv(f'data/Motifs601.csv')
-# e_rank = pd.read_csv(f'data/Ethynyl_CrystE_all.csv')
+e_rank = pd.read_csv(f'data/Cyano_CrystE_all.csv')
 # result = pd.concat([filns,feature], axis=1)
 
 # sort motifs in order of ID listing in Kernel:
@@ -129,29 +132,30 @@ feature = feature.loc[filns.ID.values.tolist()] # sort rows by index according t
 feature['packing'] = feature['packing'].fillna(8) #replace(nan,8
 feature['packing'].astype('int32')
 feature.drop(['Unnamed: 0'], axis=1)
-
+print(feature.head())
 # # sort erank in order of filns: 
-# e_rank['E_rank'] = e_rank.index
-# e_rank = e_rank.set_index('ID')
-# e_rank_id = e_rank.loc[filns.ID.values.tolist()] 
+e_rank['E_rank'] = e_rank.index
+e_rank = e_rank.set_index('ID')
+e_rank_id = e_rank.loc[filns.ID.values.tolist()] 
+print(e_rank_id)
 
 # add index (cyrstal_ID) to index and columns
 adj = adj.set_index([filns.ID.values])
 adj.columns = [filns.ID]
 
-x = adj.values
 flat = see_five_highest_sim(adj)
-duplicate1 = flat[0]
-duplicate2 = flat[1]
-real_max = flat[6]
-sim_with_itself = flat[2]
+real_max = flat[n_cut]
+print(flat[:15])
+print("Old maximum Sim: ", np.max(flat))
+print("New maximum sim: ", real_max)
+
 #descending_x =  -np.sort(-x)
-duplicates = [flat[0], flat[1], flat[2], flat[3], flat[4], flat[5]]
+duplicates = [item for item in flat[:n_cut]]
 for item in duplicates:
-    adj[adj == item] = real_max #np.nan # real_max #flat[-2]
+    adj[adj == item] = real_max #1000 #real_max #1000#real_max #np.nan # real_max #flat[-2]
 
-see_five_highest_sim(adj)
-
+print(flat[:5])
+x = adj.values
 # figure out how to shrink the margin between ''outlier'' similarity of graph
 # with itself compared to any other crystal to better see the other similarities.
 # adj = adj.replace(15057.281250, 200)
@@ -189,11 +193,11 @@ X_embedded = TSNE(n_components=2).fit_transform(x)
 tsne = pd.DataFrame(data=X_embedded)
 tsne = tsne.rename(columns={0: "x", 1: "y"}) #, 2:"z"})
 #tsne = pd.DataFrame({'x':X_embedded[:,0], 'y':X_embedded[:,1], 'y':X_embedded[:,2]})
-print(tsne.head())
+# print(tsne.head())
 # combine both dfs
 whole = pd.concat([tsne, part], axis=1)
 
-print(whole.head())
+# print(whole.head())
 # n unique clusters found
 n_clusters = len(unique_clusters)
 # labels = np.arange(0, n_clusters, 1)
@@ -206,10 +210,10 @@ print("Unique clusters: ", n_clusters)
 s0, s1, s2, s3, s4, s5, s6, s7, s8, m = generate_subsets(whole, feature)
 
 
-print()
+print("Print features: ")
 
 print(feature.head())
 # for idx, r in s0.iterrows():
 #     print(r)
     # print(r.motif[0], r.clustering_label[0])
-plot_scatter_clusters(s0, s1, s2, s3, s4, s5, s6, s7, s8, m, feature, whole, n_clusters, outn)
+plot_scatter_clusters(s0, s1, s2, s3, s4, s5, s6, s7, s8, m, e_rank_id, whole, n_clusters, outn)

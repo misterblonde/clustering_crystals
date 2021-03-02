@@ -106,7 +106,7 @@ var_dict = { 8: "nan", 0 : "none", 1 : "translational", 2 : "back-to-back", 3 : 
             6 : "back-to-back/interlocked", 7 : "translational/back-to-back/interlocked"}
 
 # inp = float(sys.argv[1]) #espilon dbscan
-kernel_name = "PM_4_6"
+kernel_name = str(sys.argv[6]) #"PM_5_7" #"PM_4_6"
 
 min_sample_size = 1
 n_cut = int(sys.argv[5]) #6 #11
@@ -114,8 +114,8 @@ clustering_algo = str(sys.argv[1])
 n_components = int(sys.argv[2])
 n_clusters = int(sys.argv[3])
 linkage_criterium = str(sys.argv[4])
-plotting = "True"
-print(n_cut)
+plotting = "False"
+# print(n_cut)
 # read in data:
 adj = pd.read_csv(f'data/{kernel_name}.csv', header=None) # kernel
 filns = pd.read_csv('data/names_list.txt', header=None, names=['ID'])
@@ -144,11 +144,21 @@ ener['f_relat_ener'] = ener['f_ener'] #- ener['f_ener'].min()
 # figure out how to shrink the margin between ''outlier'' similarity of graph
 # with itself compared to any other crystal to better see the other similarities.
 # adj = adj.replace(15057.281250, 200)
+# outlier_pos = np.argwhere(adj.values > 90)
+# for row in outlier_pos:
+#     if row[0] == row[1]:
+#         pass
+#     else: 
+#         sim_val = adj.values[row[0]][row[1]]
+#         # print(row)
+#         if sim_val <= 180:
+#             # print(filns.iloc[row[0]][0], filns.iloc[row[1]][0], sim_val)
+
 flat = see_five_highest_sim(adj)
 real_max = flat[n_cut]
-print(flat[:15])
-print("Old maximum Sim: ", np.max(flat))
-print("New maximum sim: ", real_max)
+# print(flat[:15])
+# print("Old maximum Sim: ", np.max(flat))
+# print("New maximum sim: ", real_max)
 
 #descending_x =  -np.sort(-x)
 duplicates = [item for item in flat[:n_cut]]
@@ -156,7 +166,7 @@ for item in duplicates:
     adj[adj == item] = real_max #1000 #real_max #1000#real_max #np.nan # real_max #flat[-2]
 
 flat = see_five_highest_sim(adj)
-print(flat[:15])
+# print(flat[:15])
 
 x = adj.values
 #%%
@@ -187,6 +197,7 @@ if clustering_algo == "Agglomerative":
     print(n_clusters, min(list(X_fitted.distances_)), max(X_fitted.distances_), mean(list(X_fitted.distances_)), np.std(list(X_fitted.distances_)))
 
 if clustering_algo == "kmeans":
+    # calculate distances between cluster centres
     # distance between clusters: 
     dists = euclidean_distances(X_fitted.cluster_centers_)
     tri_dists = dists[np.triu_indices(n_clusters, 1)]
@@ -231,7 +242,7 @@ for idx, name in enumerate(pca.components_[1]):
     clusters_d[clustering.labels_[idx]].append(W99_label)
 
     if E_rank_label <= 38: # E_rank_label energy ranking label
-            texts.append(plt.text(xval,yval, E_rank_label, weight="bold", fontsize=10)) # 
+            texts.append(plt.text(xval,yval, W99_label, weight="bold", fontsize=10)) # 
 
     # if name < -0.10:  #and xval > 0.08:
     #     texts.append(plt.text(xval,yval, W99_label, weight="bold", fontsize=6))
